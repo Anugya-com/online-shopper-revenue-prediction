@@ -1,0 +1,82 @@
+library(rpart)
+library(rpart.plot)
+library(caret)
+
+
+#Importing the Dataset
+
+new.shop.df <- read.csv("new_shop.csv")
+new.shop.df
+new.shop.df$Revenue <- factor(new.shop.df$Revenue, levels = c(1, 2), 
+                              labels = c("0", "1"))
+View(new.shop.df)
+new.shop <- new.shop.df
+
+#Basic Exploratory Data Analysis
+
+#Understanding dimensions of the data set
+dim(new.shop)
+#First few values of the data set
+head(new.shop) 
+#Summary Statistics of the data set
+summary(new.shop)
+
+
+#### Partitioning and Train Dataset
+
+set.seed(3)
+train.index <- sample(c(1:dim(new.shop)[1]), dim(new.shop)[1]*0.6)  
+train.df <- new.shop[train.index, ]
+valid.df <- new.shop[-train.index, ]
+
+
+# runnig logistic regression
+# using glm() (general linear model) with family = "binomial" to fit a logistic regression.
+
+logit.reg <- glm(Revenue ~ ., data = train.df, family = "binomial") 
+options(scipen=999)
+summary(logit.reg)
+
+
+# using predict() with type = "response" to compute predicted probabilities. 
+logit.reg.pred <- predict(logit.reg, valid.df, type = "response")
+
+# first 5 actual and predicted records
+data.frame(actual = valid.df$Revenue[1:5], predicted = logit.reg.pred[1:5])
+
+logit.reg.pred.classes <- ifelse(logit.reg.pred > 0.5, 1, 0)
+confusionMatrix(as.factor(logit.reg.pred.classes), as.factor(valid.df$Revenue))
+
+# model selection running full and empty logistic regressions
+full.logit.reg <- glm(Revenue ~ ., data = train.df, family = "binomial") 
+empty.logit.reg  <- glm(Revenue ~ 1,data = train.df, family= "binomial")
+summary(empty.logit.reg)
+
+
+### Stepwise Iteration for selecting input parameters for the neural net
+stepwise = step(empty.logit.reg,scope=list(lower=formula(empty.logit.reg),upper=formula(full.logit.reg)), direction="both",trace=1)
+formula(stepwise)
+
+stepwise.reg.pred <- predict(stepwise, valid.df, type = "response")
+stepwise.reg.pred.classes <- ifelse(stepwise.reg.pred > 0.5, 1, 0)
+confusionMatrix(as.factor(stepwise.reg.pred.classes), as.factor(valid.df$Revenue))
+
+## Neural Net
+
+library(neuralnet)
+
+nn <- neuralnet(Revenue ~ Browser + OperatingSystems + TrafficType, data = train.df, linear.output = F, hidden = 3)
+
+plot(nn, rep="best")
+
+nn.pred <- predict(nn,valid.df, type = "response")
+nn.pred.classes <- ifelse(nn.pred[,1] > 0.9, 1, 0)
+confusionMatrix(as.factor(nn.pred.classes), as.factor(valid.df$Revenue)) 
+
+### Error in table(data, reference, dnn = dnn, ...) : 
+### All arguments must have the same length
+
+
+
+
+
